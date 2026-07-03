@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Bir ay = bir veri giriş birimi. FINAL kontrol panelinin aylık zaman serisi yapısı.
+model MonthlyEntry {
+  id        Int      @id @default(autoincrement())
+  month     String   @unique // "YYYY-MM" ör. "2026-01"
+  label     String   // ör. "Ocak 2026"
+  year      Int      // 2026 (yıllık özet için)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  summary  MonthlySummary?
+  product  ProductPerf?
+  customer CustomerKPI?
+  funnel   Funnel?
+  channels ChannelPerf[]
+  socials  SocialMedia[]
+}
+
+/// Aylık Özet — GA4 + İKAS satış, net satış, ROAS (FINAL "Aylık Özet" sheet'i)
+model MonthlySummary {
+  id        Int          @id @default(autoincrement())
+  entryId   Int          @unique
+  entry     MonthlyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  ga4Gross    Float? // GA4 Brüt Satış (Toplam Gelir)
+  ikasGross   Float? // İKAS Brüt Satış (Gerçek Ciro) — ESAS CİRO
+  cancelled   Float? // İptal (TL)
+  returned    Float? // İade (TL)
+  netSales    Float? // Net Satış (TL) — boşsa ikasGross - iptal - iade
+  orderCount  Int?   // Sipariş (adet)
+  aov         Float? // Ortalama Sepet (Net) — boşsa netSales / orderCount
+  adSpend     Float? // Toplam Reklam Harcaması (TL)
+  grossRoas   Float? // Brüt ROAS — boşsa ikasGross / adSpend
+  netRoas     Float? // Net ROAS — boşsa netSales / adSpend
+  notes       String?
+}
+
+/// Ürün Performansı (FINAL "Ürün Performansı" sheet'i)
+model ProductPerf {
+  id        Int          @id @default(autoincrement())
+  entryId   Int          @unique
+  entry     MonthlyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  orderCount       Int?    // Sipariş (adet)
+  productsSold     Int?    // Satılan Ürün Adedi
+  productsPerOrder Float?  // Fatura Başına Düşen Ürün — boşsa productsSold / orderCount
+  topProduct       String? // En Çok Satan Ürün
+  notes            String?
+}
+
+/// Müşteri KPI (FINAL "Müşteri KPI" sheet'i). Churn ELLE GİRİLMEZ — türetilir.
+model CustomerKPI {
+  id        Int          @id @default(autoincrement())
+  entryId   Int          @unique
+  entry     MonthlyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  totalCustomers  Int?    // Toplam Müşteri
+  newCustomers    Int?    // Yeni Müşteri
+  repeatCustomers Int?    // Tekrar Müşteri
+  repeatRate      Float?  // Tekrar Oranı — boşsa repeatCustomers / totalCustomers
+  notes           String?
+  // churnRate alanı YOK — lib/kpi.ts içinde (1 - repeatRate) olarak hesaplanır
+}
+
+/// Funnel / GA4 dönüşüm hunisi (FINAL "Funnel (GA4)" sheet'i)
+model Funnel {
+  id        Int          @id @default(autoincrement())
+  entryId   Int          @unique
+  entry     MonthlyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  sessions       Int?   // Oturum
+  productViews   Int?   // Ürün Görüntüleme
+  addToCart      Int?   // Sepete Ekleme
+  checkout       Int?   // Checkout
+  purchase       Int?   // Satın Alma
+  cartAbandon    Int?   // Sepet Terk (adet)
+  checkoutAbandon Int?  // Checkout Terk (adet)
+  notes          String?
+  // Oranlar (sepete ekleme/checkout/satın alma) türetilir
+}
+
+/// Kanal Performansı (FINAL "Kanal Performansı" sheet'i) — ay başına çok satır
+model ChannelPerf {
+  id        Int          @id @default(autoincrement())
+  entryId   Int
+  entry     MonthlyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  channel    String  // "Google Ads" | "Meta (Sales)" | "Organic" ...
+  spend      Float?  // Harcama (TL)
+  grossSales Float?  // Brüt Satış (TL)
+  orderCount Int?    // Sipariş (adet)
+  roas       Float?  // Brüt ROAS — boşsa grossSales / spend
+  notes      String?
+
+  @@index([entryId])
+}
+
+/// Sosyal Medya Takibi (FINAL "Sosyal Medya Takibi" sheet'i) — ay başına çok satır (platform)
+model SocialMedia {
+  id        Int          @id @default(autoincrement())
+  entryId   Int
+  entry     MonthlyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  platform    String // "İNSTAGRAM" | "FACEBOOK" | "Linkedln" | "YOUTUBE"
+  followers   Int?   // Toplam Takipçi
+  gained      Int?   // Kazanılan Takipçi
+  views       Int?   // Görüntülenme
+  engagement  String? // Etkileşim (YouTube'da "saat" gibi metin olabilir)
+
+  @@index([entryId])
+}
+
+/// Reklam kampanyası PLANLAMA (mezzeMarin aylık pazarlama dosyaları) — değişmedi
+model Campaign {
+  id                Int      @id @default(autoincrement())
+  periodMonth       String   // "YYYY-MM" ör. "2026-06"
+  category          String   // "SALES_META" | "AWARENESS_META" | "GOOGLE" | "OTHER"
+  no                String?
+  duration          String?
+  format            String?
+  creativeText      String?
+  description       String?
+  objective         String?
+  targetUrl         String?
+  targetCities      String?
+  targetAudience    String?
+  targetingCriteria String?
+  trackingPlan      String?
+  budget            Float?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([periodMonth])
+}

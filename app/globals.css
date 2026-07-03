@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-white text-slate-800 antialiased;
+}
+
+/* Sayısal alanlar için hizalı görünüm */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
