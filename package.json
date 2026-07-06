@@ -5,7 +5,7 @@
   "description": "PAKYÜREK / mezzeMarin KPI Dashboard - kolay veri girişi ve anlamlı analizler",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma migrate deploy && next build",
     "start": "next start -H 0.0.0.0",
     "lint": "next lint",
     "import": "tsx scripts/import-excel.ts",
